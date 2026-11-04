@@ -1,11 +1,13 @@
-# Google Gemini AI Chatbot (CLI & Telegram Bot) com RAG e Transbordo Inteligente
+# Telegram AI Bot com Google Gemini
 
-Boilerplate modular para criar chatbots de Inteligência Artificial utilizando a nova SDK oficial **Google GenAI** (`google-genai`), com:
-- **Pontuação de Sessão e Transbordo Humano:** Sistema que pontua intenções de insatisfação, reclamação ou pedidos diretos de atendente. Se atingir a meta (ex: 15 pontos) **dentro** do horário comercial, a conversa é transferida. Se estiver **fora** do horário de atendimento, a transferência é bloqueada e a IA segue atendendo.
-- **Base de Conhecimento da Empresa (RAG em Memória):** Consulta automática de dados oficiais da empresa (`data/company_knowledge.json`) para tirar dúvidas sobre planos, preços e políticas.
-- **Skills de Comportamento:** Arquivos declarativos em Markdown (`skills/`) que definem persona, tom de voz e regras.
-- **Banco de Dados em Memória:** SQLite `:memory:` para gerenciar histórico e contexto de conversas isolados por sessão/usuário.
-- **Dupla Interface:** Terminal interativo (**CLI**) com streaming em tempo real e bot completo para o **Telegram**.
+Bot profissional para o **Telegram** integrado à API oficial do **Google Gemini** (`google-genai`).
+
+Desenvolvido para atendimento a clientes, suporte técnico institucional e vendas, com:
+- **Respostas Inteligentes com Google Gemini (`gemini-2.5-flash`):** Respostas rápidas e contextuais.
+- **Base de Conhecimento da Empresa (RAG em Memória):** Consulta automática de dados e políticas da empresa (`data/company_knowledge.json`) para tirar dúvidas sobre planos, preços e regras.
+- **Horário Oficial de Brasília em Tempo Real:** Consciência temporal sem precisar perguntar data/hora ao usuário.
+- **Pontuação de Sessão e Transbordo Humano:** Se o cliente demonstrar insatisfação ou solicitar atendimento humano dentro do horário comercial (Seg-Sex, 09h às 18h), a conversa é transferida. Fora desse período, a IA segue atendendo 24/7.
+- **Sessões Isoladas por Usuário:** Banco SQLite em memória (`cache=shared`) garantindo contexto individual para cada usuário do Telegram.
 
 ---
 
@@ -13,53 +15,71 @@ Boilerplate modular para criar chatbots de Inteligência Artificial utilizando a
 
 ```text
 AIChat/
+│── telegram_bot.py             # Arquivo principal de execução do Bot do Telegram
+│── chatbot.py                  # Serviço de integração com Google Gemini e regras de negócio
+│── handoff_manager.py          # Pontuação de mensagens e validação de horário de Brasília
+│── memory_db.py                # Banco relacional em memória (histórico, RAG e sessões)
+│── skill_loader.py             # Leitor de arquivos de personalidade e tom de voz
+│── config.py                   # Validação de credenciais e parâmetros (.env)
 │── data/
-│   └── company_knowledge.json  # Base de dados com informações oficiais da empresa
+│   └── company_knowledge.json  # FAQ e dados cadastrados da empresa
 │── skills/
-│   └── support_agent.md        # Skill de comportamento (persona, tom e regras)
-│── handoff_manager.py          # Lógica de pontuação de mensagens e validação de horário comercial
-│── memory_db.py                # Banco em memória (histórico, RAG e pontuação de sessão)
-│── skill_loader.py             # Módulo de carregamento e parsing de skills
-│── chatbot.py                  # Integração Gemini + injeção de conhecimento + transbordo
-│── config.py                   # Leitura e validação de configurações (.env)
-│── main.py                     # Chat interativo via Terminal (CLI)
-│── telegram_bot.py             # Bot para Telegram integrado
-│── requirements.txt            # Dependências do projeto
+│   └── support_agent.md        # Prompt de persona e diretrizes da IA
+│── requirements.txt            # Dependências Python
 │── .env.example                # Modelo de variáveis de ambiente
 └── README.md                   # Documentação
 ```
 
 ---
 
-## ⏰ Regras de Atendimento Humano e Pontuação
+## 🚀 Como Configurar e Rodar o Bot
 
-Configurável via `.env`:
-```env
-HANDOFF_THRESHOLD=15    # Limite de pontos para acionar a transferência
-SUPPORT_START_HOUR=9    # Horário inicial (09h)
-SUPPORT_END_HOUR=18     # Horário final (18h)
+### 1. Criar e Ativar o Ambiente Virtual
+
+No Windows (PowerShell):
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 ```
 
-- **Como pontua:** Palavras como *"atendente"*, *"falar com alguém"*, *"humano"*, *"reclamação"*, *"cancelar"*, *"não resolveu"* somam pontos acumulados na sessão do usuário no banco em memória.
-- **Dentro do horário comercial (Seg-Sex, 09h às 18h):** Ao atingir a pontuação, o bot aciona o transbordo para a fila de atendimento humano.
-- **Fora do horário comercial:** O sistema detecta que o suporte humano está fechado, **não** transfere e mantém o usuário com o chatbot da IA 24/7.
+### 2. Instalar as Dependências
 
----
+```powershell
+pip install -r requirements.txt
+```
 
-## 🚀 Como Executar
+### 3. Configurar Variáveis de Ambiente (`.env`)
 
-### 1. Configurar Chaves no `.env`
+Copie o modelo de exemplo:
 ```powershell
 Copy-Item .env.example .env
 ```
-Preencha a `GEMINI_API_KEY` e o `TELEGRAM_BOT_TOKEN`.
 
-### 2. Executar no Terminal (CLI)
-```powershell
-.\venv\Scripts\python.exe main.py
+Abra o arquivo `.env` e preencha suas chaves:
+```env
+# Obtenha em: https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=sua_chave_aqui
+
+# Obtenha ao criar o bot com o @BotFather no Telegram
+TELEGRAM_BOT_TOKEN=seu_token_do_telegram_aqui
+
+# Modelo padrão
+GEMINI_MODEL=gemini-2.5-flash
+TIMEZONE=America/Sao_Paulo
 ```
 
-### 3. Executar no Telegram
+### 4. Iniciar o Bot
+
 ```powershell
-.\venv\Scripts\python.exe telegram_bot.py
+python telegram_bot.py
 ```
+*(ou `.\venv\Scripts\python.exe telegram_bot.py`)*
+
+Pronto! Acesse seu bot no aplicativo do **Telegram**, envie `/start` e comece a conversar.
+
+---
+
+## 💬 Comandos no Telegram
+- `/start` — Inicia o atendimento e apresenta o assistente.
+- `/ajuda` — Informa horários e comandos disponíveis.
+- `/limpar` — Apaga a memória e histórico da conversa atual no banco.

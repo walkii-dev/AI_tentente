@@ -5,10 +5,7 @@ from config import config
 
 
 class HandoffManager:
-    """
-    Gerencia a pontuação de necessidade de atendimento humano e verifica
-    se a empresa está em horário de atendimento comercial considerando o horário de Brasília.
-    """
+ 
 
     WEEKDAY_NAMES = [
         "Segunda-feira",
@@ -81,6 +78,7 @@ class HandoffManager:
 
     @classmethod
     def calculate_message_score(cls, message: str) -> int:
+        """Calcula a pontuação adicionada por uma única mensagem."""
         normalized = message.lower()
         score = 0
         for trigger, pts in cls.SCORE_TRIGGERS.items():
@@ -89,14 +87,11 @@ class HandoffManager:
         return score
 
     @classmethod
-    def is_within_business_hours(cls, now: Optional[datetime] = None) -> bool:
-        """
-        Verifica se o horário (por padrão em Brasília) está dentro da janela comercial:
-        Seg-Sex das 09h às 18h.
-        """
+    def is_within_business_hours(cls, now: Optional[datetime] = None) -> bool:  
         if now is None:
-            now = cls.get_brasilia_time()
+            now = datetime.now()
 
+        # Verifica dia da semana (0=Segunda ... 4=Sexta)
         if now.weekday() not in config.support_workdays:
             return False
 
@@ -130,3 +125,4 @@ class HandoffManager:
                 "Por isso, a conversa permanecerá com o assistente virtual 24/7 até o retorno da equipe humana."
             )
             return False, False, reason
+

@@ -1,5 +1,4 @@
 google-genai>=2.30.0
 python-dotenv>=1.0.1
-rich>=13.7.1
 python-telegram-bot>=21.0
 tzdata>=2026.1

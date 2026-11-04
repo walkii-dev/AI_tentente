@@ -1,4 +1,4 @@
-from typing import Generator, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from google import genai
 from google.genai import types
 
@@ -8,17 +8,16 @@ from skill_loader import skill_loader
 from handoff_manager import HandoffManager
 
 
-class GeminiChatbot:
+class GeminiTelegramBotService:
     """
-    Gerencia a sessão de chat, conexão com a API Google Gemini (google-genai),
-    banco de dados em memória, base de conhecimento da empresa (RAG),
-    ciência em tempo real do Horário Oficial de Brasília e transbordo humano.
+    Serviço central do Bot do Telegram com Google Gemini (google-genai),
+    base de conhecimento em memória (RAG), horário oficial de Brasília e transbordo humano.
     """
 
     def __init__(
         self,
         config: Config,
-        session_id: str = "default_session",
+        session_id: str,
         skill_name: Optional[str] = None,
         database: Optional[InMemoryChatDatabase] = None,
     ):
@@ -31,21 +30,18 @@ class GeminiChatbot:
         active_skill = skill_name or self.config.active_skill
         self.base_skill_prompt = skill_loader.load_skill_prompt(active_skill)
 
-        # Se for uma sessão nova no banco em memória, inicializa
         if not self.db.get_messages(self.session_id):
             self.reset()
 
     def reset(self) -> None:
-        """Reinicia o histórico da conversa e a pontuação no banco de dados em memória."""
+        """Reinicia o histórico da conversa e o score no banco de dados em memória."""
         self.db.clear_history(self.session_id)
         self.db.add_message(self.session_id, role="system", content=self.base_skill_prompt)
 
     def check_and_update_handoff(self, user_message: str) -> Tuple[bool, str]:
-        """
-        Calcula pontuação da mensagem e avalia transbordo considerando o horário de Brasília.
-        """
+        """Calcula a pontuação da mensagem e avalia transbordo pelo horário de Brasília."""
         if self.db.is_handed_off(self.session_id):
-            return True, "👤 [Sessão já sob atendimento humano. Aguarde um instante.]"
+            return True, "👤 [Sua conversa está na fila de atendimento humano. Em breve um atendente responderá.]"
 
         points = HandoffManager.calculate_message_score(user_message)
         current_score = self.db.add_score(self.session_id, points)
@@ -62,7 +58,7 @@ class GeminiChatbot:
         return False, ""
 
     def _build_context_with_knowledge(self, user_message: str) -> str:
-        """Consulta o banco por informações relevantes da empresa (RAG)."""
+        """Busca dados da empresa no SQLite em memória e injeta no contexto."""
         results = self.db.search_knowledge(user_message, limit=3)
         if not results:
             return user_message
@@ -99,10 +95,7 @@ class GeminiChatbot:
         return contents
 
     def _get_dynamic_system_instruction(self) -> str:
-        """
-        Gera as instruções do sistema injetando a data e horário atual exato de Brasília.
-        Isso garante que a IA nunca pergunte as horas para o cliente e saiba se o suporte está aberto.
-        """
+        """Injeta dinamicamente a data, hora exata de Brasília e status de expediente humano."""
         time_info = HandoffManager.get_brasilia_time_info()
         status_expediente = (
             "ABERTO (dentro do horário de atendimento humano)"
@@ -122,46 +115,11 @@ class GeminiChatbot:
 
         return f"{self.base_skill_prompt}{time_context}"
 
-    def _get_generation_config(self) -> types.GenerateContentConfig:
-        return types.GenerateContentConfig(
-            system_instruction=self._get_dynamic_system_instruction(),
-            temperature=self.config.temperature,
-            max_output_tokens=self.config.max_output_tokens,
-        )
-
-    def send_message_stream(self, user_message: str) -> Generator[str, None, None]:
-        is_transferred, notice = self.check_and_update_handoff(user_message)
-        if notice:
-            yield f"\n{notice}\n\n"
-
-        if is_transferred:
-            return
-
-        enriched_user_message = self._build_context_with_knowledge(user_message)
-        self.db.add_message(self.session_id, role="user", content=enriched_user_message)
-        contents = self._build_gemini_contents()
-
-        try:
-            response_stream = self.client.models.generate_content_stream(
-                model=self.config.model,
-                contents=contents,
-                config=self._get_generation_config(),
-            )
-
-            assistant_reply = []
-            for chunk in response_stream:
-                if chunk.text:
-                    assistant_reply.append(chunk.text)
-                    yield chunk.text
-
-            full_content = "".join(assistant_reply)
-            self.db.add_message(self.session_id, role="model", content=full_content)
-
-        except Exception as exc:
-            self._rollback_last_user_message()
-            raise exc
-
     def send_message(self, user_message: str) -> str:
+        """
+        Recebe a mensagem do Telegram, avalia transbordo,
+        consulta base da empresa e gera resposta com o Gemini.
+        """
         is_transferred, notice = self.check_and_update_handoff(user_message)
         if is_transferred:
             return notice
@@ -174,7 +132,11 @@ class GeminiChatbot:
             response = self.client.models.generate_content(
                 model=self.config.model,
                 contents=contents,
-                config=self._get_generation_config(),
+                config=types.GenerateContentConfig(
+                    system_instruction=self._get_dynamic_system_instruction(),
+                    temperature=self.config.temperature,
+                    max_output_tokens=self.config.max_output_tokens,
+                ),
             )
             full_content = response.text or ""
             self.db.add_message(self.session_id, role="model", content=full_content)
@@ -184,12 +146,9 @@ class GeminiChatbot:
             return full_content
 
         except Exception as exc:
-            self._rollback_last_user_message()
+            messages = self.db.get_messages(self.session_id)
+            if messages and messages[-1]["role"] == "user":
+                self.db.clear_history(self.session_id)
+                for msg in messages[:-1]:
+                    self.db.add_message(self.session_id, msg["role"], msg["content"])
             raise exc
-
-    def _rollback_last_user_message(self) -> None:
-        messages = self.db.get_messages(self.session_id)
-        if messages and messages[-1]["role"] == "user":
-            self.db.clear_history(self.session_id)
-            for msg in messages[:-1]:
-                self.db.add_message(self.session_id, msg["role"], msg["content"])
