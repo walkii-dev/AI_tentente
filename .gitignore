@@ -5,3 +5,6 @@ __pycache__/
 venv/
 .venv/
 .pytest_cache/
+
+# Base de dados específica da empresa (não versionar dados sensíveis)
+data/company_knowledge.json

@@ -14,6 +14,7 @@ class InMemoryChatDatabase:
     """
 
     DEFAULT_DATA_FILE = Path(__file__).resolve().parent / "data" / "company_knowledge.json"
+    EXAMPLE_DATA_FILE = Path(__file__).resolve().parent / "data" / "company_knowledge.example.json"
 
     def __init__(self, uri: bool = True):
         db_path = "file:aichat_memdb?mode=memory&cache=shared" if uri else ":memory:"
@@ -183,7 +184,9 @@ class InMemoryChatDatabase:
     def load_company_knowledge(self, file_path: Optional[Path] = None) -> int:
         target_path = file_path or self.DEFAULT_DATA_FILE
         if not target_path.exists():
-            return 0
+            target_path = self.EXAMPLE_DATA_FILE
+            if not target_path.exists():
+                return 0
 
         with open(target_path, "r", encoding="utf-8") as f:
             items = json.load(f)

@@ -22,7 +22,8 @@ AIChat/
 │── skill_loader.py             # Leitor de arquivos de personalidade e tom de voz
 │── config.py                   # Validação de credenciais e parâmetros (.env)
 │── data/
-│   └── company_knowledge.json  # FAQ e dados cadastrados da empresa
+│   ├── company_knowledge.example.json # Modelo de dados da empresa para preenchimento
+│   └── company_knowledge.json         # Seus dados reais (ignorado pelo git)
 │── skills/
 │   └── support_agent.md        # Prompt de persona e diretrizes da IA
 │── requirements.txt            # Dependências Python
@@ -68,7 +69,15 @@ GEMINI_MODEL=gemini-2.5-flash
 TIMEZONE=America/Sao_Paulo
 ```
 
-### 4. Iniciar o Bot
+### 4. Configurar Base da Empresa (Opcional / Recomendado)
+
+Copie o modelo de dados da empresa para criar sua base real:
+```powershell
+Copy-Item data/company_knowledge.example.json data/company_knowledge.json
+```
+Edite o arquivo `data/company_knowledge.json` com os produtos, horários e canais de contato da sua própria empresa. Seus dados estarão seguros pois este arquivo é protegido pelo `.gitignore`.
+
+### 5. Iniciar o Bot
 
 ```powershell
 python telegram_bot.py

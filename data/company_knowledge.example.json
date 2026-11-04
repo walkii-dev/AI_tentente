@@ -1,0 +1,32 @@
+[
+  {
+    "category": "Sobre a Empresa",
+    "title": "Quem somos e o que fazemos",
+    "content": "Somos uma empresa de [ramo de atuação da empresa, ex: tecnologia / roupas / consultoria], focada em [proposta de valor da empresa]."
+  },
+  {
+    "category": "Atendimento",
+    "title": "Horários de Funcionamento",
+    "content": "Atendentes humanos disponíveis de segunda a sexta-feira, das 09h às 18h (horário de Brasília). Nosso chatbot de IA atende 24 horas por dia, 7 dias por semana."
+  },
+  {
+    "category": "Contato",
+    "title": "Canais Oficiais de Contato",
+    "content": "E-mail de suporte: suporte@suaempresa.com.br. Telefone / WhatsApp: (11) 99999-9999. Instagram: https://www.instagram.com/suaempresa. Site oficial: https://www.suaempresa.com.br."
+  },
+  {
+    "category": "Produtos e Serviços",
+    "title": "Tabela de Preços e Catálogo",
+    "content": "Item 1 - R$ 99,90. Item 2 - R$ 149,90. Item 3 - R$ 299,90. [Descreva aqui seus principais produtos, serviços, planos ou pacotes]."
+  },
+  {
+    "category": "Pagamentos",
+    "title": "Formas de Pagamento e Reembolso",
+    "content": "Aceitamos Pix, cartão de crédito em até 12x e boleto bancário. Garantia de reembolso de até 7 dias corridos após a compra com apresentação da nota fiscal."
+  },
+  {
+    "category": "Localização",
+    "title": "Endereço e Unidades",
+    "content": "Nossa sede / loja física está localizada na Rua Exemplo, número 123, Bairro, Cidade/UF. Atendemos também online para todo o Brasil."
+  }
+]
