@@ -15,6 +15,13 @@ class Config:
     active_skill: str = os.getenv("ACTIVE_SKILL", "support_agent.md")
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
+    # Regras de Transbordo para Atendente Humano
+    handoff_threshold: int = int(os.getenv("HANDOFF_THRESHOLD", "15"))  # Pontos para transbordo
+    support_start_hour: int = int(os.getenv("SUPPORT_START_HOUR", "9"))  # 09h
+    support_end_hour: int = int(os.getenv("SUPPORT_END_HOUR", "18"))     # 18h
+    # 0=Segunda, 1=Terça, 2=Quarta, 3=Quinta, 4=Sexta, 5=Sábado, 6=Domingo
+    support_workdays: tuple = (0, 1, 2, 3, 4)
+
     def validate(self):
         if not self.api_key or self.api_key == "sua_chave_aqui":
             raise ValueError(

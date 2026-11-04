@@ -10,6 +10,7 @@ class InMemoryChatDatabase:
     - Histórico de conversas por usuário/sessão (chat_history)
     - Memória chave-valor do usuário (user_memory)
     - Base de conhecimento institucional/produtos da empresa (company_knowledge)
+    - Pontuação e status de transbordo da sessão (session_status)
     """
 
     DEFAULT_DATA_FILE = Path(__file__).resolve().parent / "data" / "company_knowledge.json"
@@ -47,7 +48,7 @@ class InMemoryChatDatabase:
                 );
                 """
             )
-            # Base de conhecimento da empresa (tabela FTS / busca textual)
+            # Base de conhecimento da empresa
             self.conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS company_knowledge (
@@ -55,6 +56,17 @@ class InMemoryChatDatabase:
                     category TEXT NOT NULL,
                     title TEXT NOT NULL,
                     content TEXT NOT NULL
+                );
+                """
+            )
+            # Controle de pontuação e transbordo por sessão
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS session_status (
+                    session_id TEXT PRIMARY KEY,
+                    score INTEGER DEFAULT 0,
+                    is_handed_off BOOLEAN DEFAULT 0,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
                 """
             )
@@ -87,8 +99,56 @@ class InMemoryChatDatabase:
 
     def clear_history(self, session_id: str) -> None:
         with self.conn:
+            self.conn.execute("DELETE FROM chat_history WHERE session_id = ?;", (session_id,))
+            self.reset_session_score(session_id)
+
+    # ------------------------------------
+    # Gestão de Pontuação e Transbordo
+    # ------------------------------------
+    def add_score(self, session_id: str, points: int) -> int:
+        """Adiciona pontos à sessão e retorna o novo total."""
+        with self.conn:
             self.conn.execute(
-                "DELETE FROM chat_history WHERE session_id = ?;",
+                """
+                INSERT INTO session_status (session_id, score, is_handed_off, updated_at)
+                VALUES (?, ?, 0, CURRENT_TIMESTAMP)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    score = score + excluded.score,
+                    updated_at = CURRENT_TIMESTAMP;
+                """,
+                (session_id, points),
+            )
+        return self.get_session_score(session_id)
+
+    def get_session_score(self, session_id: str) -> int:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT score FROM session_status WHERE session_id = ?;", (session_id,))
+        row = cursor.fetchone()
+        return row["score"] if row else 0
+
+    def set_handed_off(self, session_id: str, handed_off: bool = True) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO session_status (session_id, score, is_handed_off, updated_at)
+                VALUES (?, 0, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    is_handed_off = excluded.is_handed_off,
+                    updated_at = CURRENT_TIMESTAMP;
+                """,
+                (session_id, 1 if handed_off else 0),
+            )
+
+    def is_handed_off(self, session_id: str) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT is_handed_off FROM session_status WHERE session_id = ?;", (session_id,))
+        row = cursor.fetchone()
+        return bool(row["is_handed_off"]) if row else False
+
+    def reset_session_score(self, session_id: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE session_status SET score = 0, is_handed_off = 0 WHERE session_id = ?;",
                 (session_id,),
             )
 
@@ -121,7 +181,6 @@ class InMemoryChatDatabase:
     # Base de Conhecimento da Empresa (RAG)
     # ----------------------------------------
     def load_company_knowledge(self, file_path: Optional[Path] = None) -> int:
-        """Carrega ou atualiza os dados da empresa a partir de um arquivo JSON."""
         target_path = file_path or self.DEFAULT_DATA_FILE
         if not target_path.exists():
             return 0
@@ -139,21 +198,14 @@ class InMemoryChatDatabase:
         return len(items)
 
     def search_knowledge(self, query: str, limit: int = 3) -> List[Dict[str, str]]:
-        """
-        Busca itens relevantes da empresa comparando os termos da pergunta
-        contra os títulos, categorias e conteúdos cadastrados no banco.
-        """
-        # Limpa termos e divide em palavras-chave relevantes
         words = [w.strip().lower() for w in query.replace("?", "").replace("!", "").replace(",", "").split() if len(w) > 2]
         
         cursor = self.conn.cursor()
         if not words:
-            # Se a pergunta for muito curta, busca os tópicos principais gerais
             cursor.execute("SELECT category, title, content FROM company_knowledge LIMIT ?", (limit,))
             rows = cursor.fetchall()
             return [{"category": r["category"], "title": r["title"], "content": r["content"]} for r in rows]
 
-        # Monta pontuação por relevância baseada na ocorrência das palavras
         where_clauses = []
         params = []
         for word in words:
@@ -172,7 +224,6 @@ class InMemoryChatDatabase:
             LIMIT ?;
         """
         
-        # Parâmetros para o cálculo de relevância + filtro WHERE + limit
         relevance_params = []
         for word in words:
             relevance_params.extend([f"%{word}%", f"%{word}%"])
@@ -184,17 +235,9 @@ class InMemoryChatDatabase:
             rows = cursor.fetchall()
             return [{"category": r["category"], "title": r["title"], "content": r["content"]} for r in rows]
         except Exception:
-            # Fallback seguro caso ocorra qualquer erro na query dinâmica
             cursor.execute("SELECT category, title, content FROM company_knowledge LIMIT ?", (limit,))
             rows = cursor.fetchall()
             return [{"category": r["category"], "title": r["title"], "content": r["content"]} for r in rows]
-
-    def get_all_knowledge(self) -> List[Dict[str, str]]:
-        """Retorna todas as informações cadastradas da empresa."""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT category, title, content FROM company_knowledge ORDER BY id ASC")
-        rows = cursor.fetchall()
-        return [{"category": r["category"], "title": r["title"], "content": r["content"]} for r in rows]
 
 
 # Instância global do banco em memória

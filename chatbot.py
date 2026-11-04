@@ -1,16 +1,18 @@
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Tuple
 from google import genai
 from google.genai import types
 
 from config import Config
 from memory_db import InMemoryChatDatabase, db as default_db
 from skill_loader import skill_loader
+from handoff_manager import HandoffManager
 
 
 class GeminiChatbot:
     """
     Gerencia a sessão de chat, conexão com a API Google Gemini (google-genai),
-    banco de dados em memória, base de conhecimento da empresa (RAG) e skills.
+    banco de dados em memória, base de conhecimento da empresa (RAG),
+    sistema de pontuação e transbordo para atendente humano.
     """
 
     def __init__(
@@ -34,17 +36,40 @@ class GeminiChatbot:
             self.reset()
 
     def reset(self) -> None:
-        """Reinicia o histórico da conversa no banco de dados em memória."""
+        """Reinicia o histórico da conversa e a pontuação no banco de dados em memória."""
         self.db.clear_history(self.session_id)
         self.db.add_message(self.session_id, role="system", content=self.system_prompt)
 
-    def _build_context_with_knowledge(self, user_message: str) -> str:
+    def check_and_update_handoff(self, user_message: str) -> Tuple[bool, str]:
         """
-        Consulta o banco em memória por informações relevantes da empresa
-        e monta o prompt enriquecido com a base de conhecimento (RAG).
+        Calcula os pontos da mensagem, atualiza a pontuação acumulada da sessão no banco
+        e avalia se deve transferir para um humano ou manter na IA por estar fora do horário.
+        Retorna (is_transferred: bool, notification_text: str).
         """
-        results = self.db.search_knowledge(user_message, limit=3)
+        # Se já foi transferido para um humano
+        if self.db.is_handed_off(self.session_id):
+            return True, "👤 [Sessão já sob atendimento humano. Aguarde um instante.]"
 
+        # Calcula pontos da mensagem e atualiza o total no banco
+        points = HandoffManager.calculate_message_score(user_message)
+        current_score = self.db.add_score(self.session_id, points)
+
+        should_handoff, is_in_hours, message = HandoffManager.evaluate_handoff(current_score)
+
+        if should_handoff:
+            # Transfere e marca status no banco
+            self.db.set_handed_off(self.session_id, True)
+            return True, message
+
+        # Se atingiu a pontuação mas está FORA do horário, não transfere e avisa
+        if not is_in_hours and current_score >= self.config.handoff_threshold:
+            return False, message
+
+        return False, ""
+
+    def _build_context_with_knowledge(self, user_message: str) -> str:
+        """Consulta o banco por informações relevantes da empresa (RAG)."""
+        results = self.db.search_knowledge(user_message, limit=3)
         if not results:
             return user_message
 
@@ -52,25 +77,20 @@ class GeminiChatbot:
             [f"[{item['category']}] {item['title']}:\n{item['content']}" for item in results]
         )
 
-        enriched_message = (
+        return (
             f"{user_message}\n\n"
             f"--- INFORMAÇÕES OFICIAIS DA EMPRESA (CONSULTE PARA RESPONDER CASO PERTINENTE) ---\n"
             f"{knowledge_text}\n"
             f"----------------------------------------------------------------------------------"
         )
-        return enriched_message
 
     def _build_gemini_contents(self) -> List[types.Content]:
-        """
-        Converte o histórico do SQLite para a lista de tipos Content da SDK google-genai.
-        """
         raw_messages = self.db.get_messages(self.session_id)
         contents: List[types.Content] = []
 
         for msg in raw_messages:
             role = msg["role"]
             content = msg["content"]
-
             if role == "system":
                 continue
 
@@ -93,11 +113,16 @@ class GeminiChatbot:
 
     def send_message_stream(self, user_message: str) -> Generator[str, None, None]:
         """
-        Envia a mensagem do usuário com contexto da empresa e transmite via streaming.
+        Envia a mensagem, verifica pontuação de atendimento humano e transmite via streaming.
         """
+        is_transferred, notice = self.check_and_update_handoff(user_message)
+        if notice:
+            yield f"\n{notice}\n\n"
+
+        if is_transferred:
+            return
+
         enriched_user_message = self._build_context_with_knowledge(user_message)
-        
-        # Registra a mensagem original para histórico limpo
         self.db.add_message(self.session_id, role="user", content=enriched_user_message)
         contents = self._build_gemini_contents()
 
@@ -123,10 +148,13 @@ class GeminiChatbot:
 
     def send_message(self, user_message: str) -> str:
         """
-        Envia a mensagem do usuário com contexto da empresa e retorna a resposta completa (usado no Telegram).
+        Envia a mensagem, processa pontuação/transbordo e retorna resposta completa (para Telegram).
         """
+        is_transferred, notice = self.check_and_update_handoff(user_message)
+        if is_transferred:
+            return notice
+
         enriched_user_message = self._build_context_with_knowledge(user_message)
-        
         self.db.add_message(self.session_id, role="user", content=enriched_user_message)
         contents = self._build_gemini_contents()
 
@@ -138,7 +166,11 @@ class GeminiChatbot:
             )
             full_content = response.text or ""
             self.db.add_message(self.session_id, role="model", content=full_content)
+
+            if notice:
+                return f"{notice}\n\n{full_content}"
             return full_content
+
         except Exception as exc:
             self._rollback_last_user_message()
             raise exc
