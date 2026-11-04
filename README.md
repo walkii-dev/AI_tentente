@@ -16,7 +16,7 @@ Desenvolvido para atendimento a clientes, suporte técnico institucional e venda
 ```text
 AIChat/
 │── telegram_bot.py             # Arquivo principal de execução do Bot do Telegram
-│── chatbot.py                  # Serviço de integração com Google Gemini e regras de negócio
+│── attendant.py                # Serviço do Atendente de IA (SupportAttendantService)
 │── handoff_manager.py          # Pontuação de mensagens e validação de horário de Brasília
 │── memory_db.py                # Banco relacional em memória (histórico, RAG e sessões)
 │── skill_loader.py             # Leitor de arquivos de personalidade e tom de voz

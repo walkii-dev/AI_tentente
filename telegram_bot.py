@@ -10,7 +10,7 @@ from telegram.ext import (
 )
 
 from config import config
-from chatbot import GeminiTelegramBotService
+from attendant import SupportAttendantService
 from memory_db import db
 from handoff_manager import HandoffManager
 
@@ -22,13 +22,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_user_bot(user_id: int) -> GeminiTelegramBotService:
+def get_user_bot(user_id: int) -> SupportAttendantService:
     """
     Recupera ou instancia a sessão isolada do usuário no Telegram.
-    Cada usuário do Telegram possui seu histórico, pontuação e estado separados no banco em memória.
+    Cada usuário possui histórico, pontuação e estado separados no banco em memória.
     """
     session_id = f"telegram_{user_id}"
-    return GeminiTelegramBotService(config=config, session_id=session_id, database=db)
+    return SupportAttendantService(config=config, session_id=session_id, database=db)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
