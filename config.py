@@ -15,6 +15,9 @@ class Config:
     active_skill: str = os.getenv("ACTIVE_SKILL", "support_agent.md")
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
+    # Fuso Horário de Brasília
+    timezone: str = os.getenv("TIMEZONE", "America/Sao_Paulo")
+
     # Regras de Transbordo para Atendente Humano
     handoff_threshold: int = int(os.getenv("HANDOFF_THRESHOLD", "15"))  # Pontos para transbordo
     support_start_hour: int = int(os.getenv("SUPPORT_START_HOUR", "9"))  # 09h
