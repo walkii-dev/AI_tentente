@@ -4,7 +4,6 @@ from typing import Dict, Optional
 
 
 class SkillLoader:
-    """Gerencia e carrega arquivos de definição de comportamento/skill para o chatbot."""
 
     DEFAULT_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
 
@@ -13,10 +12,6 @@ class SkillLoader:
         self.skills_dir.mkdir(parents=True, exist_ok=True)
 
     def load_skill_prompt(self, skill_name_or_filename: str) -> str:
-        """
-        Carrega o prompt da skill a partir de um arquivo markdown (.md).
-        Ignora o cabeçalho frontmatter (--- ... ---) se presente e retorna as instruções.
-        """
         filename = skill_name_or_filename
         if not filename.endswith(".md"):
             filename = f"{filename}.md"
@@ -32,7 +27,6 @@ class SkillLoader:
 
     @staticmethod
     def _extract_instructions(content: str) -> str:
-        """Remove o frontmatter YAML opcional e devolve o corpo do prompt."""
         content = content.strip()
         if content.startswith("---"):
             parts = content.split("---", 2)
@@ -40,6 +34,4 @@ class SkillLoader:
                 return parts[2].strip()
         return content
 
-
 skill_loader = SkillLoader()
-

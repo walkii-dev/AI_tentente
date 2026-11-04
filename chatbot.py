@@ -8,6 +8,11 @@ from skill_loader import skill_loader
 
 
 class GeminiChatbot:
+    """
+    Gerencia a sessão de chat, conexão com a API Google Gemini (google-genai),
+    banco de dados em memória, base de conhecimento da empresa (RAG) e skills.
+    """
+
     def __init__(
         self,
         config: Config,
@@ -24,14 +29,41 @@ class GeminiChatbot:
         active_skill = skill_name or self.config.active_skill
         self.system_prompt = skill_loader.load_skill_prompt(active_skill)
 
+        # Se for uma sessão nova no banco em memória, inicializa com o system instruction da skill
         if not self.db.get_messages(self.session_id):
             self.reset()
 
     def reset(self) -> None:
+        """Reinicia o histórico da conversa no banco de dados em memória."""
         self.db.clear_history(self.session_id)
         self.db.add_message(self.session_id, role="system", content=self.system_prompt)
 
+    def _build_context_with_knowledge(self, user_message: str) -> str:
+        """
+        Consulta o banco em memória por informações relevantes da empresa
+        e monta o prompt enriquecido com a base de conhecimento (RAG).
+        """
+        results = self.db.search_knowledge(user_message, limit=3)
+
+        if not results:
+            return user_message
+
+        knowledge_text = "\n\n".join(
+            [f"[{item['category']}] {item['title']}:\n{item['content']}" for item in results]
+        )
+
+        enriched_message = (
+            f"{user_message}\n\n"
+            f"--- INFORMAÇÕES OFICIAIS DA EMPRESA (CONSULTE PARA RESPONDER CASO PERTINENTE) ---\n"
+            f"{knowledge_text}\n"
+            f"----------------------------------------------------------------------------------"
+        )
+        return enriched_message
+
     def _build_gemini_contents(self) -> List[types.Content]:
+        """
+        Converte o histórico do SQLite para a lista de tipos Content da SDK google-genai.
+        """
         raw_messages = self.db.get_messages(self.session_id)
         contents: List[types.Content] = []
 
@@ -60,7 +92,13 @@ class GeminiChatbot:
         )
 
     def send_message_stream(self, user_message: str) -> Generator[str, None, None]:
-        self.db.add_message(self.session_id, role="user", content=user_message)
+        """
+        Envia a mensagem do usuário com contexto da empresa e transmite via streaming.
+        """
+        enriched_user_message = self._build_context_with_knowledge(user_message)
+        
+        # Registra a mensagem original para histórico limpo
+        self.db.add_message(self.session_id, role="user", content=enriched_user_message)
         contents = self._build_gemini_contents()
 
         try:
@@ -80,12 +118,16 @@ class GeminiChatbot:
             self.db.add_message(self.session_id, role="model", content=full_content)
 
         except Exception as exc:
-            # Em caso de erro na chamada, remove a última mensagem do usuário do histórico
             self._rollback_last_user_message()
             raise exc
 
     def send_message(self, user_message: str) -> str:
-        self.db.add_message(self.session_id, role="user", content=user_message)
+        """
+        Envia a mensagem do usuário com contexto da empresa e retorna a resposta completa (usado no Telegram).
+        """
+        enriched_user_message = self._build_context_with_knowledge(user_message)
+        
+        self.db.add_message(self.session_id, role="user", content=enriched_user_message)
         contents = self._build_gemini_contents()
 
         try:

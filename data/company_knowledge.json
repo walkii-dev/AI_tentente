@@ -1,0 +1,27 @@
+[
+  {
+    "category": "Sobre a Empresa",
+    "title": "Quem somos e o que fazemos",
+    "content": "Somos uma empresa focada em soluções inteligentes com Inteligência Artificial e automação para empresas e criadores de conteúdo."
+  },
+  {
+    "category": "Atendimento",
+    "title": "Horários de Funcionamento",
+    "content": "Nosso horário de atendimento com suporte humano é de segunda a sexta-feira, das 09h às 18h (horário de Brasília). Nosso chatbot de IA atende 24 horas por dia, 7 dias por semana."
+  },
+  {
+    "category": "Contato",
+    "title": "Canais Oficiais de Contato",
+    "content": "E-mail de suporte: suporte@minhaempresa.com.br. WhatsApp e Telefone comercial: (11) 99999-8888. Site oficial: https://www.minhaempresa.com.br."
+  },
+  {
+    "category": "Planos e Preços",
+    "title": "Planos de Assinatura",
+    "content": "Oferecemos 3 planos: Plano Básico (R$ 49/mês, até 1 bot e 1.000 mensagens), Plano Pro (R$ 149/mês, bots ilimitados e suporte prioritário) e Plano Enterprise (sob consulta, com integrações customizadas)."
+  },
+  {
+    "category": "Pagamentos",
+    "title": "Formas de Pagamento e Reembolso",
+    "content": "Aceitamos Pix, cartão de crédito em até 12x e boleto bancário. Oferecemos garantia incondicional de 7 dias com reembolso total se solicitado pelo suporte."
+  }
+]
